@@ -11,62 +11,105 @@
 
 <div class="billing">
 
+    <!-- PRODUCTS -->
     <section class="panel">
-        <input id="search"
-               placeholder="Search product or SKU..."
-               oninput="filterProducts()">
+
+        <input
+            id="search"
+            type="text"
+            placeholder="Search product or SKU..."
+            oninput="filterProducts()"
+        >
 
         <div id="products" class="productgrid">
+
             {% for p in products %}
-            <div class="product"
-                 data-name="{{ p.name|lower }} {{ p.sku|lower }}"
-                 onclick="addProduct({{ p.id }}, {{ p.name|tojson }}, {{ p.price }}, {{ p.stock }})">
+
+            <div
+                class="product"
+                data-name="{{ p.name|lower }} {{ p.sku|lower }}"
+                data-id="{{ p.id }}"
+                data-product-name="{{ p.name }}"
+                data-price="{{ p.price }}"
+                data-stock="{{ p.stock }}"
+                onclick="addProductFromElement(this)"
+            >
 
                 <b>{{ p.name }}</b>
-                <span>{{ p.category or 'General' }} • {{ p.sku }}</span>
-                <strong>₹{{ "%.2f"|format(p.price) }}</strong>
-                <small>Stock: {{ p.stock }}</small>
+
+                <span>
+                    {{ p.category or 'General' }} • {{ p.sku }}
+                </span>
+
+                <strong>
+                    ₹{{ "%.2f"|format(p.price) }}
+                </strong>
+
+                <small>
+                    Stock: {{ p.stock }}
+                </small>
 
             </div>
+
             {% endfor %}
+
         </div>
+
     </section>
 
 
+    <!-- CART -->
     <section class="panel cart">
 
         <h2>Cart</h2>
 
-        <input id="customer"
-               placeholder="Customer name">
+        <input
+            id="customer"
+            type="text"
+            placeholder="Customer name"
+        >
 
         <div id="cart"></div>
 
         <hr>
 
+
+        <!-- DISCOUNT AND TAX -->
         <div class="totals">
 
             <label>
                 Discount
-                <input id="discount"
-                       type="number"
-                       min="0"
-                       step="0.01"
-                       value="0"
-                       oninput="renderCart()">
+
+                <input
+                    id="discount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value="0"
+                    oninput="renderCart()"
+                >
+
             </label>
+
 
             <label>
                 Tax %
-                <input id="tax"
-                       type="number"
-                       min="0"
-                       step="0.01"
-                       value="0"
-                       oninput="renderCart()">
+
+                <input
+                    id="tax"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value="0"
+                    oninput="renderCart()"
+                >
+
             </label>
 
         </div>
+
+
+        <!-- TOTALS -->
 
         <p>
             Subtotal:
@@ -88,13 +131,31 @@
             ₹<span id="total">0.00</span>
         </h2>
 
+
+        <!-- PAYMENT -->
+
         <select id="payment">
-            <option>Cash</option>
-            <option>UPI</option>
-            <option>Card</option>
+
+            <option value="Cash">
+                Cash
+            </option>
+
+            <option value="UPI">
+                UPI
+            </option>
+
+            <option value="Card">
+                Card
+            </option>
+
         </select>
 
-        <button class="wide" onclick="checkout()">
+
+        <button
+            class="wide"
+            type="button"
+            onclick="checkout()"
+        >
             Complete Payment & Generate Bill
         </button>
 
@@ -108,209 +169,444 @@
 let cart = [];
 
 
+/* =========================================
+   ADD PRODUCT FROM PRODUCT CARD
+========================================= */
+
+function addProductFromElement(element) {
+
+    const id = Number(element.dataset.id);
+
+    const name = element.dataset.productName;
+
+    const price = Number(element.dataset.price);
+
+    const stock = Number(element.dataset.stock);
+
+    addProduct(id, name, price, stock);
+}
+
+
+/* =========================================
+   ADD PRODUCT TO CART
+========================================= */
+
 function addProduct(id, name, price, stock) {
 
     if (stock <= 0) {
+
         alert("This product is out of stock.");
+
         return;
     }
 
-    let existing = cart.find(item => item.id === id);
+
+    let existing = cart.find(function(item) {
+
+        return item.id === id;
+
+    });
+
 
     if (existing) {
 
         if (existing.qty < existing.stock) {
+
             existing.qty++;
+
         } else {
+
             alert("Maximum available stock reached.");
+
             return;
         }
 
     } else {
 
         cart.push({
+
             id: id,
+
             name: name,
+
             price: Number(price),
+
             stock: Number(stock),
+
             qty: 1
+
         });
 
     }
 
+
     renderCart();
 }
 
+
+/* =========================================
+   CHANGE QUANTITY
+========================================= */
 
 function change(id, amount) {
 
-    let item = cart.find(product => product.id === id);
+    let item = cart.find(function(product) {
 
-    if (!item) {
-        return;
-    }
-
-    item.qty += amount;
-
-    if (item.qty <= 0) {
-        cart = cart.filter(product => product.id !== id);
-    }
-
-    if (item.qty > item.stock) {
-        item.qty = item.stock;
-    }
-
-    renderCart();
-}
-
-
-function renderCart() {
-
-    const cartElement = document.getElementById("cart");
-
-    cartElement.innerHTML = "";
-
-    let subtotal = 0;
-
-    cart.forEach(item => {
-
-        subtotal += item.price * item.qty;
-
-        cartElement.innerHTML += `
-            <div class="cartrow">
-
-                <span>
-                    <b>${item.name}</b>
-                    <br>
-                    <small>
-                        ₹${item.price.toFixed(2)} × ${item.qty}
-                    </small>
-                </span>
-
-                <span>
-                    <button onclick="change(${item.id}, -1)">−</button>
-                    ${item.qty}
-                    <button onclick="change(${item.id}, 1)">+</button>
-                </span>
-
-            </div>
-        `;
+        return product.id === id;
 
     });
 
 
-    const discountInput = document.getElementById("discount");
-    const taxInput = document.getElementById("tax");
+    if (!item) {
 
-    const discount = Math.min(
-        Math.max(Number(discountInput.value || 0), 0),
-        subtotal
-    );
-
-    const taxRate = Math.max(
-        Number(taxInput.value || 0),
-        0
-    );
-
-    const taxableAmount = subtotal - discount;
-
-    const tax = taxableAmount * taxRate / 100;
-
-    const total = taxableAmount + tax;
+        return;
+    }
 
 
-    document.getElementById("subtotal").textContent =
-        subtotal.toFixed(2);
+    item.qty += amount;
 
-    document.getElementById("discountView").textContent =
-        discount.toFixed(2);
 
-    document.getElementById("taxView").textContent =
-        tax.toFixed(2);
+    if (item.qty <= 0) {
 
-    document.getElementById("total").textContent =
-        total.toFixed(2);
+        cart = cart.filter(function(product) {
+
+            return product.id !== id;
+
+        });
+
+    }
+
+
+    if (item.qty > item.stock) {
+
+        item.qty = item.stock;
+
+    }
+
+
+    renderCart();
 }
 
+
+/* =========================================
+   DISPLAY CART
+========================================= */
+
+function renderCart() {
+
+    const cartElement =
+        document.getElementById("cart");
+
+
+    cartElement.innerHTML = "";
+
+
+    let subtotal = 0;
+
+
+    cart.forEach(function(item) {
+
+        subtotal +=
+            Number(item.price) *
+            Number(item.qty);
+
+
+        const row =
+            document.createElement("div");
+
+
+        row.className = "cartrow";
+
+
+        row.innerHTML = `
+
+            <span>
+
+                <b>${escapeHtml(item.name)}</b>
+
+                <br>
+
+                <small>
+                    ₹${Number(item.price).toFixed(2)}
+                    ×
+                    ${item.qty}
+                </small>
+
+            </span>
+
+
+            <span>
+
+                <button
+                    type="button"
+                    onclick="change(${item.id}, -1)"
+                >
+                    −
+                </button>
+
+                ${item.qty}
+
+                <button
+                    type="button"
+                    onclick="change(${item.id}, 1)"
+                >
+                    +
+                </button>
+
+            </span>
+
+        `;
+
+
+        cartElement.appendChild(row);
+
+    });
+
+
+    const discountInput =
+        document.getElementById("discount");
+
+
+    const taxInput =
+        document.getElementById("tax");
+
+
+    let discount =
+        Number(discountInput.value || 0);
+
+
+    let taxRate =
+        Number(taxInput.value || 0);
+
+
+    if (discount < 0) {
+
+        discount = 0;
+
+    }
+
+
+    if (discount > subtotal) {
+
+        discount = subtotal;
+
+    }
+
+
+    if (taxRate < 0) {
+
+        taxRate = 0;
+
+    }
+
+
+    const taxableAmount =
+        subtotal - discount;
+
+
+    const tax =
+        taxableAmount * taxRate / 100;
+
+
+    const total =
+        taxableAmount + tax;
+
+
+    document.getElementById("subtotal")
+        .textContent =
+        subtotal.toFixed(2);
+
+
+    document.getElementById("discountView")
+        .textContent =
+        discount.toFixed(2);
+
+
+    document.getElementById("taxView")
+        .textContent =
+        tax.toFixed(2);
+
+
+    document.getElementById("total")
+        .textContent =
+        total.toFixed(2);
+
+}
+
+
+/* =========================================
+   SEARCH PRODUCTS
+========================================= */
 
 function filterProducts() {
 
     const query =
-        document.getElementById("search")
-        .value
-        .toLowerCase();
+        document
+            .getElementById("search")
+            .value
+            .toLowerCase()
+            .trim();
 
-    document
-        .querySelectorAll(".product")
-        .forEach(product => {
 
-            product.style.display =
-                product.dataset.name.includes(query)
-                    ? "flex"
-                    : "none";
+    const products =
+        document.querySelectorAll(".product");
 
-        });
+
+    products.forEach(function(product) {
+
+        const name =
+            product.dataset.name || "";
+
+
+        if (name.includes(query)) {
+
+            product.style.display = "";
+
+        } else {
+
+            product.style.display = "none";
+
+        }
+
+    });
+
 }
 
+
+/* =========================================
+   CHECKOUT
+========================================= */
 
 async function checkout() {
 
-    if (!cart.length) {
+    if (cart.length === 0) {
+
         alert("Cart is empty.");
+
         return;
     }
 
-    const response = await fetch(
-        "/billing/checkout",
-        {
-            method: "POST",
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+    const customerName =
+        document
+            .getElementById("customer")
+            .value
+            .trim();
 
-            body: JSON.stringify({
 
-                items: cart,
+    const paymentMethod =
+        document
+            .getElementById("payment")
+            .value;
 
-                customer_name:
-                    document.getElementById("customer").value ||
-                    "Walk-in Customer",
 
-                payment_method:
-                    document.getElementById("payment").value,
+    const discount =
+        Number(
+            document
+                .getElementById("discount")
+                .value || 0
+        );
 
-                discount:
-                    Number(
-                        document.getElementById("discount").value || 0
-                    ),
 
-                tax_rate:
-                    Number(
-                        document.getElementById("tax").value || 0
-                    )
+    const taxRate =
+        Number(
+            document
+                .getElementById("tax")
+                .value || 0
+        );
 
-            })
+
+    try {
+
+        const response =
+            await fetch(
+                "/billing/checkout",
+                {
+
+                    method: "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "application/json"
+
+                    },
+
+                    body: JSON.stringify({
+
+                        items: cart,
+
+                        customer_name:
+                            customerName ||
+                            "Walk-in Customer",
+
+                        payment_method:
+                            paymentMethod,
+
+                        discount:
+                            discount,
+
+                        tax_rate:
+                            taxRate
+
+                    })
+
+                }
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (result.ok) {
+
+            window.location.href =
+                "/bill/" +
+                result.invoice;
+
+        } else {
+
+            alert(
+                result.error ||
+                "Unable to complete payment."
+            );
+
         }
-    );
 
+    } catch (error) {
 
-    const result = await response.json();
+        console.error(error);
 
-
-    if (result.ok) {
-
-        window.location.href =
-            "/bill/" + result.invoice;
-
-    } else {
-
-        alert(result.error);
+        alert(
+            "Unable to connect to the server."
+        );
 
     }
 
 }
 
+
+/* =========================================
+   SAFE HTML
+========================================= */
+
+function escapeHtml(value) {
+
+    const div =
+        document.createElement("div");
+
+
+    div.textContent = value;
+
+
+    return div.innerHTML;
+}
+
+
+/* =========================================
+   INITIAL CART
+========================================= */
 
 renderCart();
 
