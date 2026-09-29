@@ -1,2 +1,319 @@
-{% extends "base.html" %}{% block content %}<div class="pagehead"><div><p class="eyebrow">BILLING PORTAL</p><h1>Create Bill</h1><p class="muted">Select products, collect payment and print the invoice.</p></div></div><div class="billing"><section class="panel"><input id="search" placeholder="Search product or SKU..." oninput="filterProducts()"><div id="products" class="productgrid">{% for p in products %}<div class="product" data-name="{{p.name|lower}} {{p.sku|lower}}" onclick="add({{p.id}},{{p.name|tojson}},{{p.price}},{{p.stock}})"><b>{{p.name}}</b><span>{{p.category or 'General'}} • {{p.sku}}</span><strong>₹{{"%.2f"|format(p.price)}}</strong><small>Stock: {{p.stock}}</small></div>{% endfor %}</div></section><section class="panel cart"><h2>Cart</h2><input id="customer" placeholder="Customer name"><div id="cart"></div><hr><div class="totals"><label>Discount <input id="discount" type="number" min="0" step="0.01" value="0" oninput="render()"></label><label>Tax % <input id="tax" type="number" min="0" step="0.01" value="0" oninput="render()"></label></div><p>Subtotal: ₹<span id="subtotal">0.00</span></p><p>Discount: ₹<span id="discountView">0.00</span></p><p>Tax: ₹<span id="taxView">0.00</span></p><h2>Total: ₹<span id="total">0.00</span></h2><select id="payment"><option>Cash</option><option>UPI</option><option>Card</option></select><button class="wide" onclick="checkout()">Complete Payment & Generate Bill</button></section></div><script>
-let cart=[];function add(id,name,price,stock){let x=cart.find(i=>i.id===id);if(x){if(x.qty<stock)x.qty++;}else cart.push({id,name,price,stock,qty:1});render()}function change(id,d){let x=cart.find(i=>i.id===id);if(!x)return;x.qty+=d;if(x.qty<=0)cart=cart.filter(i=>i.id!==id);if(x&&x.qty>x.stock)x.qty=x.stock;render()}function render(){let c=document.getElementById('cart');c.innerHTML='';let subtotal=0;cart.forEach(x=>{subtotal+=x.price*x.qty;c.innerHTML+=`<div class="cartrow"><span><b>${x.name}</b><br><small>₹${x.price.toFixed(2)} × ${x.qty}</small></span><span><button onclick="change(${x.id},-1)">−</button>${x.qty}<button onclick="change(${x.id},1)">+</button></span></div>`});let discount=Math.min(Math.max(Number(document.getElementById('discount').value||0),0),subtotal);let tax=(subtotal-discount)*Math.max(Number(document.getElementById('tax').value||0),0)/100;document.getElementById('subtotal').textContent=subtotal.toFixed(2);document.getElementById('discountView').textContent=discount.toFixed(2);document.getElementById('taxView').textContent=tax.toFixed(2);document.getElementById('total').textContent=(subtotal-discount+tax).toFixed(2)}function filterProducts(){let q=document.getElementById('search').value.toLowerCase();document.querySelectorAll('.product').forEach(x=>x.style.display=x.dataset.name.includes(q)?'flex':'none')}async function checkout(){if(!cart.length)return alert('Cart is empty');let r=await fetch('/billing/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:cart,customer_name:document.getElementById('customer').value||'Walk-in Customer',payment_method:document.getElementById('payment').value,discount:Number(document.getElementById('discount').value||0),tax_rate:Number(document.getElementById('tax').value||0)})});let x=await r.json();if(x.ok)location.href='/bill/'+x.invoice;else alert(x.error)}render();</script>{% endblock %}
+{% extends "base.html" %}
+{% block content %}
+
+<div class="pagehead">
+    <div>
+        <p class="eyebrow">BILLING PORTAL</p>
+        <h1>Create Bill</h1>
+        <p class="muted">Select products, collect payment and print the invoice.</p>
+    </div>
+</div>
+
+<div class="billing">
+
+    <section class="panel">
+        <input id="search"
+               placeholder="Search product or SKU..."
+               oninput="filterProducts()">
+
+        <div id="products" class="productgrid">
+            {% for p in products %}
+            <div class="product"
+                 data-name="{{ p.name|lower }} {{ p.sku|lower }}"
+                 onclick="addProduct({{ p.id }}, {{ p.name|tojson }}, {{ p.price }}, {{ p.stock }})">
+
+                <b>{{ p.name }}</b>
+                <span>{{ p.category or 'General' }} • {{ p.sku }}</span>
+                <strong>₹{{ "%.2f"|format(p.price) }}</strong>
+                <small>Stock: {{ p.stock }}</small>
+
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+
+    <section class="panel cart">
+
+        <h2>Cart</h2>
+
+        <input id="customer"
+               placeholder="Customer name">
+
+        <div id="cart"></div>
+
+        <hr>
+
+        <div class="totals">
+
+            <label>
+                Discount
+                <input id="discount"
+                       type="number"
+                       min="0"
+                       step="0.01"
+                       value="0"
+                       oninput="renderCart()">
+            </label>
+
+            <label>
+                Tax %
+                <input id="tax"
+                       type="number"
+                       min="0"
+                       step="0.01"
+                       value="0"
+                       oninput="renderCart()">
+            </label>
+
+        </div>
+
+        <p>
+            Subtotal:
+            ₹<span id="subtotal">0.00</span>
+        </p>
+
+        <p>
+            Discount:
+            ₹<span id="discountView">0.00</span>
+        </p>
+
+        <p>
+            Tax:
+            ₹<span id="taxView">0.00</span>
+        </p>
+
+        <h2>
+            Total:
+            ₹<span id="total">0.00</span>
+        </h2>
+
+        <select id="payment">
+            <option>Cash</option>
+            <option>UPI</option>
+            <option>Card</option>
+        </select>
+
+        <button class="wide" onclick="checkout()">
+            Complete Payment & Generate Bill
+        </button>
+
+    </section>
+
+</div>
+
+
+<script>
+
+let cart = [];
+
+
+function addProduct(id, name, price, stock) {
+
+    if (stock <= 0) {
+        alert("This product is out of stock.");
+        return;
+    }
+
+    let existing = cart.find(item => item.id === id);
+
+    if (existing) {
+
+        if (existing.qty < existing.stock) {
+            existing.qty++;
+        } else {
+            alert("Maximum available stock reached.");
+            return;
+        }
+
+    } else {
+
+        cart.push({
+            id: id,
+            name: name,
+            price: Number(price),
+            stock: Number(stock),
+            qty: 1
+        });
+
+    }
+
+    renderCart();
+}
+
+
+function change(id, amount) {
+
+    let item = cart.find(product => product.id === id);
+
+    if (!item) {
+        return;
+    }
+
+    item.qty += amount;
+
+    if (item.qty <= 0) {
+        cart = cart.filter(product => product.id !== id);
+    }
+
+    if (item.qty > item.stock) {
+        item.qty = item.stock;
+    }
+
+    renderCart();
+}
+
+
+function renderCart() {
+
+    const cartElement = document.getElementById("cart");
+
+    cartElement.innerHTML = "";
+
+    let subtotal = 0;
+
+    cart.forEach(item => {
+
+        subtotal += item.price * item.qty;
+
+        cartElement.innerHTML += `
+            <div class="cartrow">
+
+                <span>
+                    <b>${item.name}</b>
+                    <br>
+                    <small>
+                        ₹${item.price.toFixed(2)} × ${item.qty}
+                    </small>
+                </span>
+
+                <span>
+                    <button onclick="change(${item.id}, -1)">−</button>
+                    ${item.qty}
+                    <button onclick="change(${item.id}, 1)">+</button>
+                </span>
+
+            </div>
+        `;
+
+    });
+
+
+    const discountInput = document.getElementById("discount");
+    const taxInput = document.getElementById("tax");
+
+    const discount = Math.min(
+        Math.max(Number(discountInput.value || 0), 0),
+        subtotal
+    );
+
+    const taxRate = Math.max(
+        Number(taxInput.value || 0),
+        0
+    );
+
+    const taxableAmount = subtotal - discount;
+
+    const tax = taxableAmount * taxRate / 100;
+
+    const total = taxableAmount + tax;
+
+
+    document.getElementById("subtotal").textContent =
+        subtotal.toFixed(2);
+
+    document.getElementById("discountView").textContent =
+        discount.toFixed(2);
+
+    document.getElementById("taxView").textContent =
+        tax.toFixed(2);
+
+    document.getElementById("total").textContent =
+        total.toFixed(2);
+}
+
+
+function filterProducts() {
+
+    const query =
+        document.getElementById("search")
+        .value
+        .toLowerCase();
+
+    document
+        .querySelectorAll(".product")
+        .forEach(product => {
+
+            product.style.display =
+                product.dataset.name.includes(query)
+                    ? "flex"
+                    : "none";
+
+        });
+}
+
+
+async function checkout() {
+
+    if (!cart.length) {
+        alert("Cart is empty.");
+        return;
+    }
+
+    const response = await fetch(
+        "/billing/checkout",
+        {
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+
+                items: cart,
+
+                customer_name:
+                    document.getElementById("customer").value ||
+                    "Walk-in Customer",
+
+                payment_method:
+                    document.getElementById("payment").value,
+
+                discount:
+                    Number(
+                        document.getElementById("discount").value || 0
+                    ),
+
+                tax_rate:
+                    Number(
+                        document.getElementById("tax").value || 0
+                    )
+
+            })
+        }
+    );
+
+
+    const result = await response.json();
+
+
+    if (result.ok) {
+
+        window.location.href =
+            "/bill/" + result.invoice;
+
+    } else {
+
+        alert(result.error);
+
+    }
+
+}
+
+
+renderCart();
+
+</script>
+
+{% endblock %}
